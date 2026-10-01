@@ -121,10 +121,10 @@ To publish a release:
 
 ```bash
 git add .
-git commit -m "Release v1.0.0"
-git tag v1.0.0
+git commit -m "Release v1.0.1"
+git tag v1.0.1
 git push origin main
-git push origin v1.0.0
+git push origin v1.0.1
 ```
 
 The GitHub Action will create:

@@ -39,6 +39,7 @@ const DEFAULT_CONFIG = Object.freeze({
 
 let activePlayback = null;
 let lastPlaybackId = null;
+let creditsManager = null;
 
 function cloneDefaultConfig() {
   return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -150,7 +151,9 @@ Hooks.on("getSceneControlButtons", controls => {
         order: 0,
         button: true,
         visible: true,
-        onChange: () => openCreditsManager()
+        onChange: () => {
+          try { openCreditsManager(); } catch (error) { reportManagerError(error); }
+        }
       },
       preview: {
         name: "preview",
@@ -183,59 +186,89 @@ Hooks.on("getSceneControlButtons", controls => {
   };
 });
 
-async function openCreditsManager() {
+function reportManagerError(error) {
+  console.error(`[${MODULE_ID}] Failed to open or use the End Credits manager.`, error);
+  const message = error?.message ? `: ${error.message}` : "";
+  ui.notifications?.error(`End Credits configuration could not open${message}`);
+}
+
+function openCreditsManager() {
   if (!game.user?.isGM) return;
 
-  const DialogV2 = foundry.applications.api.DialogV2;
-  const config = currentConfig();
-  const content = buildManagerContent(config);
+  try {
+    if (creditsManager?.rendered) {
+      creditsManager.bringToFront();
+      return creditsManager;
+    }
 
-  const collect = () => collectManagerConfig(content);
+    const DialogV2 = globalThis.foundry?.applications?.api?.DialogV2;
+    if (!DialogV2) {
+      throw new Error("Foundry DialogV2 API is unavailable. Foundry VTT 13 or newer is required.");
+    }
 
-  const result = await DialogV2.wait({
-    window: {
-      title: "End Credits",
-      icon: "fa-solid fa-film",
-      resizable: true
-    },
-    position: {
-      width: 760,
-      height: 760
-    },
-    content,
-    buttons: [
-      {
-        action: "cancel",
-        label: "Cancel",
-        icon: "fa-solid fa-xmark"
+    const content = buildManagerContent(currentConfig());
+
+    const saveFromDialog = async (dialog, { play = false } = {}) => {
+      const root = dialog.element?.querySelector?.(".end-credits-manager") ?? content;
+      const normalized = normalizeConfig(collectManagerConfig(root));
+      await game.settings.set(MODULE_ID, "creditsConfig", normalized);
+      ui.notifications.info("End Credits configuration saved.");
+      if (play) await startCreditsForEveryone(normalized);
+      return normalized;
+    };
+
+    creditsManager = new DialogV2({
+      window: {
+        title: "End Credits",
+        icon: "fa-solid fa-film",
+        resizable: true
       },
-      {
-        action: "save",
-        label: "Save",
-        icon: "fa-solid fa-floppy-disk",
-        callback: async () => ({ action: "save", config: collect() })
+      position: {
+        width: 760,
+        height: 760
       },
-      {
-        action: "save-play",
-        label: "Save & Play",
-        icon: "fa-solid fa-play",
-        default: true,
-        callback: async () => ({ action: "save-play", config: collect() })
-      }
-    ],
-    modal: false
-  }, {
-    rejectClose: false
-  });
+      content,
+      buttons: [
+        {
+          action: "cancel",
+          label: "Cancel",
+          icon: "fa-solid fa-xmark"
+        },
+        {
+          action: "save",
+          label: "Save",
+          icon: "fa-solid fa-floppy-disk",
+          callback: async (_event, _button, dialog) => {
+            await saveFromDialog(dialog);
+            return "save";
+          }
+        },
+        {
+          action: "save-play",
+          label: "Save & Play",
+          icon: "fa-solid fa-play",
+          default: true,
+          callback: async (_event, _button, dialog) => {
+            await saveFromDialog(dialog, { play: true });
+            return "save-play";
+          }
+        }
+      ],
+      modal: false
+    });
 
-  if (!result?.config) return;
+    creditsManager.addEventListener("close", () => {
+      creditsManager = null;
+    });
 
-  const normalized = normalizeConfig(result.config);
-  await game.settings.set(MODULE_ID, "creditsConfig", normalized);
-  ui.notifications.info("End Credits configuration saved.");
-
-  if (result.action === "save-play") {
-    await startCreditsForEveryone(normalized);
+    creditsManager.render({ force: true }).catch(error => {
+      creditsManager = null;
+      reportManagerError(error);
+    });
+    return creditsManager;
+  } catch (error) {
+    creditsManager = null;
+    reportManagerError(error);
   }
 }
 
