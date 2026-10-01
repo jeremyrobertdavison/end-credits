@@ -206,10 +206,12 @@ function openCreditsManager() {
       throw new Error("Foundry DialogV2 API is unavailable. Foundry VTT 13 or newer is required.");
     }
 
-    const content = buildManagerContent(currentConfig());
+    const config = currentConfig();
+    const content = buildManagerContent(config);
 
     const saveFromDialog = async (dialog, { play = false } = {}) => {
-      const root = dialog.element?.querySelector?.(".end-credits-manager") ?? content;
+      const root = dialog.element?.querySelector?.(".end-credits-manager");
+      if (!root) throw new Error("The End Credits editor content could not be found.");
       const normalized = normalizeConfig(collectManagerConfig(root));
       await game.settings.set(MODULE_ID, "creditsConfig", normalized);
       ui.notifications.info("End Credits configuration saved.");
@@ -257,6 +259,11 @@ function openCreditsManager() {
       modal: false
     });
 
+    creditsManager.addEventListener("render", () => {
+      try { initializeManagerDialog(creditsManager, config); }
+      catch (error) { reportManagerError(error); }
+    });
+
     creditsManager.addEventListener("close", () => {
       creditsManager = null;
     });
@@ -273,76 +280,90 @@ function openCreditsManager() {
 }
 
 function buildManagerContent(config) {
-  const root = document.createElement("div");
-  root.className = "end-credits-manager";
+  // DialogV2 requires an HTMLDivElement passed as content to be a completely
+  // plain outer DIV with no classes, ids, data attributes, or other attributes.
+  // The actual editor lives one level inside that required wrapper.
+  const content = document.createElement("div");
 
-  root.innerHTML = `
-    <section class="ec-settings-grid">
-      <label>
-        <span>Total runtime (seconds)</span>
-        <input class="ec-duration" type="number" min="5" max="14400" step="1" value="${Number(config.durationSeconds)}">
-      </label>
-      <label>
-        <span>Text scale</span>
-        <input class="ec-font-scale" type="number" min="0.65" max="1.75" step="0.05" value="${Number(config.fontScale)}">
-      </label>
-      <label>
-        <span>Background</span>
-        <input class="ec-background" type="color" value="${config.backgroundColor}">
-      </label>
-      <label>
-        <span>Text</span>
-        <input class="ec-text-color" type="color" value="${config.textColor}">
-      </label>
-      <label>
-        <span>Accent</span>
-        <input class="ec-accent-color" type="color" value="${config.accentColor}">
-      </label>
-      <label class="ec-checkbox-label">
-        <input class="ec-show-progress" type="checkbox" ${config.showProgress ? "checked" : ""}>
-        <span>Show progress bar</span>
-      </label>
-      <label class="ec-checkbox-label">
-        <input class="ec-allow-skip" type="checkbox" ${config.allowPlayerSkip ? "checked" : ""}>
-        <span>Let players dismiss credits locally</span>
-      </label>
-    </section>
+  content.innerHTML = `
+    <div class="end-credits-manager">
+      <section class="ec-settings-grid">
+        <label>
+          <span>Total runtime (seconds)</span>
+          <input class="ec-duration" type="number" min="5" max="14400" step="1" value="${Number(config.durationSeconds)}">
+        </label>
+        <label>
+          <span>Text scale</span>
+          <input class="ec-font-scale" type="number" min="0.65" max="1.75" step="0.05" value="${Number(config.fontScale)}">
+        </label>
+        <label>
+          <span>Background</span>
+          <input class="ec-background" type="color" value="${config.backgroundColor}">
+        </label>
+        <label>
+          <span>Text</span>
+          <input class="ec-text-color" type="color" value="${config.textColor}">
+        </label>
+        <label>
+          <span>Accent</span>
+          <input class="ec-accent-color" type="color" value="${config.accentColor}">
+        </label>
+        <label class="ec-checkbox-label">
+          <input class="ec-show-progress" type="checkbox" ${config.showProgress ? "checked" : ""}>
+          <span>Show progress bar</span>
+        </label>
+        <label class="ec-checkbox-label">
+          <input class="ec-allow-skip" type="checkbox" ${config.allowPlayerSkip ? "checked" : ""}>
+          <span>Let players dismiss credits locally</span>
+        </label>
+      </section>
 
-    <div class="ec-timing-summary" role="status"></div>
+      <div class="ec-timing-summary" role="status"></div>
 
-    <div class="ec-editor-toolbar">
-      <div>
-        <h2>Credit Cards</h2>
-        <p>Each card receives an equal share of the total runtime.</p>
+      <div class="ec-editor-toolbar">
+        <div>
+          <h2>Credit Cards</h2>
+          <p>Each card receives an equal share of the total runtime.</p>
+        </div>
+        <div class="ec-toolbar-actions">
+          <button type="button" class="ec-preview-button"><i class="fa-solid fa-eye"></i> Preview</button>
+          <button type="button" class="ec-add-credit"><i class="fa-solid fa-plus"></i> Add Credit</button>
+        </div>
       </div>
-      <div class="ec-toolbar-actions">
-        <button type="button" class="ec-preview-button"><i class="fa-solid fa-eye"></i> Preview</button>
-        <button type="button" class="ec-add-credit"><i class="fa-solid fa-plus"></i> Add Credit</button>
-      </div>
+
+      <div class="ec-credit-list"></div>
     </div>
-
-    <div class="ec-credit-list"></div>
   `;
 
+  return content;
+}
+
+function initializeManagerDialog(dialog, config) {
+  const root = dialog.element?.querySelector?.(".end-credits-manager");
+  if (!root) throw new Error("The End Credits editor could not initialize.");
+  if (root.dataset.endCreditsInitialized === "true") return;
+  root.dataset.endCreditsInitialized = "true";
+
   const list = root.querySelector(".ec-credit-list");
+  if (!list) throw new Error("The End Credits credit list could not initialize.");
+
   for (const credit of config.credits) list.append(buildCreditRow(credit));
 
-  root.querySelector(".ec-add-credit").addEventListener("click", () => {
+  root.querySelector(".ec-add-credit")?.addEventListener("click", () => {
     list.append(buildCreditRow({ id: randomId("credit"), eyebrow: "", main: "New Credit", detail: "" }));
     refreshTimingSummary(root);
     list.lastElementChild?.querySelector('[data-field="main"]')?.focus();
   });
 
-  root.querySelector(".ec-preview-button").addEventListener("click", () => {
+  root.querySelector(".ec-preview-button")?.addEventListener("click", () => {
     const previewConfig = collectManagerConfig(root);
     playCredits(previewConfig, serverTime(), randomId("preview"), { preview: true });
   });
 
-  root.querySelector(".ec-duration").addEventListener("input", () => refreshTimingSummary(root));
+  root.querySelector(".ec-duration")?.addEventListener("input", () => refreshTimingSummary(root));
   list.addEventListener("input", () => refreshTimingSummary(root));
 
   refreshTimingSummary(root);
-  return root;
 }
 
 function buildCreditRow(credit) {

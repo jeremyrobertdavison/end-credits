@@ -2,6 +2,13 @@
 
 All notable changes to End Credits will be documented here.
 
+## [1.0.2] - 2026-10-01
+
+### Fixed
+- Fixed Foundry V14 rejecting the configuration dialog with `config.content element must have no attributes`.
+- Wrapped the End Credits editor in the plain, attribute-free outer `div` required by `DialogV2`.
+- Moved all editor event binding to the dialog's post-render lifecycle so Add Credit, Preview, reordering, removal, timing updates, Save, and Save & Play remain functional after Foundry stringifies the dialog content.
+
 ## [1.0.1] - 2026-10-01
 
 ### Fixed
