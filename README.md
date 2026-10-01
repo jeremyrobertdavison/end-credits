@@ -6,9 +6,12 @@ The GM creates a list of credit cards, chooses the total runtime, and End Credit
 
 ## Features
 
+- Responsive, scrollable configuration editor that remains usable on shorter displays.
+
 - System agnostic: no dependency on D&D, Pathfinder, or any other game system.
 - GM-only End Credits control palette in the Foundry Scene Controls.
-- Add as many credit cards as you want.
+- Add as many player cards and general credit cards as you want.
+- Dedicated **Add Player** buttons create a ready-to-edit player credit in one click.
 - Each card supports a heading, a main line, and a subtitle/detail line.
 - Move cards up or down or remove them at any time.
 - Configure the total runtime in seconds.
@@ -20,7 +23,9 @@ The GM creates a list of credit cards, chooses the total runtime, and End Credit
 - GM can stop a live sequence for everyone.
 - Optional player-side dismiss button.
 - Optional progress bar.
-- Configurable background, text, accent color, and text scale.
+- Configurable base background, text, accent color, and text scale.
+- Optional background artwork selected with Foundry's native File Picker.
+- Adjustable background artwork opacity (0–100%) over a black default base.
 - World-level persistence for credit configuration.
 - Macro API for automation or custom controls.
 
@@ -54,7 +59,7 @@ Restart Foundry if necessary, then enable **End Credits** in your World's module
 
 When logged in as a GM, select the **film icon** in Foundry's Scene Controls. It provides four actions:
 
-1. **Configure End Credits** — edit timing, appearance, and credit cards.
+1. **Configure End Credits** — edit timing, appearance, background art, player cards, and general credit cards.
 2. **Preview End Credits Locally** — play the current credits only on the GM's browser.
 3. **Play End Credits for Everyone** — broadcast the sequence to connected users.
 4. **Stop End Credits for Everyone** — immediately stop an active sequence.
@@ -94,7 +99,13 @@ THANK YOU FOR PLAYING
 Until the next adventure.
 ```
 
-Each block above can be its own credit card.
+Each block above can be its own credit card. Use **Add Player** for player/character credits or **Add Credit** for anything else. Both controls are also repeated below the credit list for convenience.
+
+## Background Artwork
+
+The configuration window includes a **Background image** field with a **Browse** button that opens Foundry's native File Picker. The selected image fills the end-credit screen and is layered over the base background color. The default base is black.
+
+Use the **Background image opacity** slider to control how strongly the artwork appears. At 0% the image is invisible; at 100% it is fully opaque. This is useful for dimming artwork behind bright credit text without having to edit the source image.
 
 ## Macro API
 
@@ -121,10 +132,10 @@ To publish a release:
 
 ```bash
 git add .
-git commit -m "Release v1.0.2"
-git tag v1.0.2
+git commit -m "Release v1.0.4"
+git tag v1.0.4
 git push origin main
-git push origin v1.0.2
+git push origin v1.0.4
 ```
 
 The GitHub Action will create:

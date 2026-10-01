@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.4] - 2026-10-01
+
+### Added
+- Added prominent **Add Player** controls at both the top and bottom of the credit list.
+- Added **Add Another Credit Card** at the bottom of the list so long credit sequences can be expanded without scrolling back to the toolbar.
+- Added background image selection through Foundry's native File Picker.
+- Added a live background preview in the configuration window.
+- Added a 0–100% background image opacity control.
+- Background artwork is layered over the configured base color, which now defaults to black.
+
+### Changed
+- New player cards are pre-filled as `PLAYER`, `Character Name`, and `Played by Player Name` for quicker campaign-credit entry.
+- Updated the default player card to match the new per-player workflow.
+
+## [1.0.3] - 2026-10-01
+
+- Fixed the configuration editor being clipped on shorter displays.
+- The editor body now has its own vertical scrollbar while the dialog footer remains accessible.
+- The configuration window now chooses an initial height based on the current browser viewport.
+- Opening the editor always starts at the top of the configuration form.
+
 All notable changes to End Credits will be documented here.
 
 ## [1.0.2] - 2026-10-01

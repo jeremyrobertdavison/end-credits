@@ -3,7 +3,12 @@
   flex-direction: column;
   gap: 1rem;
   min-height: 0;
-  padding: 0.4rem;
+  max-height: calc(100dvh - 10rem);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0.4rem 0.7rem 0.8rem 0.4rem;
 }
 
 .end-credits-manager .ec-settings-grid {
@@ -82,9 +87,11 @@
 
 .end-credits-manager .ec-credit-list {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 0.65rem;
-  overflow: auto;
+  min-height: 0;
+  overflow: visible;
   padding-right: 0.25rem;
 }
 
@@ -267,5 +274,104 @@
 
   .end-credits-manager .ec-toolbar-actions {
     justify-content: start;
+  }
+}
+
+/* v1.0.4: player/card creation and configurable background art */
+.end-credits-manager .ec-background-image-field {
+  grid-column: 1 / -1;
+}
+
+.end-credits-manager .ec-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.end-credits-manager .ec-file-row button {
+  white-space: nowrap;
+}
+
+.end-credits-manager input[type="range"] {
+  width: 100%;
+}
+
+.end-credits-manager .ec-background-opacity-value {
+  margin-left: 0.35rem;
+  font-weight: 700;
+}
+
+.end-credits-manager .ec-background-preview {
+  --ec-preview-opacity: 0.35;
+  --ec-preview-image: none;
+  position: relative;
+  min-height: 8rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border-light-2, rgba(255,255,255,0.2));
+  border-radius: 6px;
+  background: #000;
+}
+
+.end-credits-manager .ec-background-preview::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--ec-preview-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  opacity: var(--ec-preview-opacity);
+}
+
+.end-credits-manager .ec-background-preview.is-empty::after {
+  content: "No background image selected — credits will display over the base background.";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  color: rgba(255,255,255,0.65);
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.end-credits-manager .ec-list-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  padding: 0.15rem 0 0.6rem;
+}
+
+.end-credits-manager .ec-list-actions button {
+  min-height: 2.6rem;
+}
+
+.end-credits-overlay .ec-background-image-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.end-credits-overlay .ec-stage {
+  z-index: 2;
+}
+
+.end-credits-overlay .ec-progress {
+  z-index: 3;
+}
+
+.end-credits-overlay .ec-playback-controls {
+  z-index: 4;
+}
+
+@media (max-width: 700px) {
+  .end-credits-manager .ec-file-row,
+  .end-credits-manager .ec-list-actions {
+    grid-template-columns: 1fr;
   }
 }

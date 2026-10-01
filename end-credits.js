@@ -3,7 +3,9 @@ const SOCKET_NAME = `module.${MODULE_ID}`;
 
 const DEFAULT_CONFIG = Object.freeze({
   durationSeconds: 120,
-  backgroundColor: "#06070a",
+  backgroundColor: "#000000",
+  backgroundImage: "",
+  backgroundOpacity: 0.35,
   textColor: "#f3efe5",
   accentColor: "#d1b06b",
   fontScale: 1,
@@ -24,9 +26,9 @@ const DEFAULT_CONFIG = Object.freeze({
     },
     {
       id: "default-players",
-      eyebrow: "PLAYERS",
-      main: "Character Name — Player Name",
-      detail: "Add one card for each player, contributor, or special thanks."
+      eyebrow: "PLAYER",
+      main: "Character Name",
+      detail: "Played by Player Name"
     },
     {
       id: "default-thanks",
@@ -40,6 +42,7 @@ const DEFAULT_CONFIG = Object.freeze({
 let activePlayback = null;
 let lastPlaybackId = null;
 let creditsManager = null;
+let creditsManagerResizeObserver = null;
 
 function cloneDefaultConfig() {
   return JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -79,6 +82,8 @@ function normalizeConfig(raw = {}) {
   return {
     durationSeconds: clamp(Number(raw.durationSeconds) || defaults.durationSeconds, 5, 14400),
     backgroundColor: sanitizeHex(raw.backgroundColor, defaults.backgroundColor),
+    backgroundImage: String(raw.backgroundImage ?? defaults.backgroundImage).slice(0, 2048),
+    backgroundOpacity: clamp(Number.isFinite(Number(raw.backgroundOpacity)) ? Number(raw.backgroundOpacity) : defaults.backgroundOpacity, 0, 1),
     textColor: sanitizeHex(raw.textColor, defaults.textColor),
     accentColor: sanitizeHex(raw.accentColor, defaults.accentColor),
     fontScale: clamp(Number(raw.fontScale) || defaults.fontScale, 0.65, 1.75),
@@ -219,6 +224,9 @@ function openCreditsManager() {
       return normalized;
     };
 
+    const dialogWidth = Math.min(760, Math.max(420, Math.floor(window.innerWidth * 0.94)));
+    const dialogHeight = Math.min(760, Math.max(420, Math.floor(window.innerHeight * 0.88)));
+
     creditsManager = new DialogV2({
       window: {
         title: "End Credits",
@@ -226,8 +234,8 @@ function openCreditsManager() {
         resizable: true
       },
       position: {
-        width: 760,
-        height: 760
+        width: dialogWidth,
+        height: dialogHeight
       },
       content,
       buttons: [
@@ -265,6 +273,8 @@ function openCreditsManager() {
     });
 
     creditsManager.addEventListener("close", () => {
+      creditsManagerResizeObserver?.disconnect();
+      creditsManagerResizeObserver = null;
       creditsManager = null;
     });
 
@@ -297,8 +307,21 @@ function buildManagerContent(config) {
           <input class="ec-font-scale" type="number" min="0.65" max="1.75" step="0.05" value="${Number(config.fontScale)}">
         </label>
         <label>
-          <span>Background</span>
+          <span>Base background</span>
           <input class="ec-background" type="color" value="${config.backgroundColor}">
+        </label>
+        <label>
+          <span>Background image opacity <strong class="ec-background-opacity-value">${Math.round(config.backgroundOpacity * 100)}%</strong></span>
+          <input class="ec-background-opacity" type="range" min="0" max="100" step="1" value="${Math.round(config.backgroundOpacity * 100)}">
+        </label>
+        <label class="ec-background-image-field">
+          <span>Background image</span>
+          <div class="ec-file-row">
+            <input class="ec-background-image" type="text" value="">
+            <button type="button" class="ec-browse-background" title="Browse Foundry files"><i class="fa-solid fa-folder-open"></i> Browse</button>
+            <button type="button" class="ec-clear-background" title="Clear background image"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <div class="ec-background-preview" aria-label="Background image preview"></div>
         </label>
         <label>
           <span>Text</span>
@@ -327,11 +350,17 @@ function buildManagerContent(config) {
         </div>
         <div class="ec-toolbar-actions">
           <button type="button" class="ec-preview-button"><i class="fa-solid fa-eye"></i> Preview</button>
+          <button type="button" class="ec-add-player"><i class="fa-solid fa-user-plus"></i> Add Player</button>
           <button type="button" class="ec-add-credit"><i class="fa-solid fa-plus"></i> Add Credit</button>
         </div>
       </div>
 
       <div class="ec-credit-list"></div>
+
+      <div class="ec-list-actions">
+        <button type="button" class="ec-add-player-bottom"><i class="fa-solid fa-user-plus"></i> Add Another Player</button>
+        <button type="button" class="ec-add-credit-bottom"><i class="fa-solid fa-plus"></i> Add Another Credit Card</button>
+      </div>
     </div>
   `;
 
@@ -341,18 +370,72 @@ function buildManagerContent(config) {
 function initializeManagerDialog(dialog, config) {
   const root = dialog.element?.querySelector?.(".end-credits-manager");
   if (!root) throw new Error("The End Credits editor could not initialize.");
+
+  const fitScrollArea = () => {
+    const app = dialog.element;
+    if (!app?.isConnected) return;
+
+    const headerHeight = app.querySelector(".window-header")?.getBoundingClientRect?.().height ?? 36;
+    const footerHeight = app.querySelector("footer")?.getBoundingClientRect?.().height ?? 56;
+    const appHeight = app.getBoundingClientRect?.().height ?? window.innerHeight;
+    const availableHeight = Math.max(240, Math.floor(appHeight - headerHeight - footerHeight - 36));
+
+    root.style.maxHeight = `${availableHeight}px`;
+    root.style.overflowY = "auto";
+    root.style.overflowX = "hidden";
+  };
+
+  fitScrollArea();
+  if (!creditsManagerResizeObserver && globalThis.ResizeObserver) {
+    creditsManagerResizeObserver = new ResizeObserver(() => fitScrollArea());
+    creditsManagerResizeObserver.observe(dialog.element);
+  }
+
   if (root.dataset.endCreditsInitialized === "true") return;
   root.dataset.endCreditsInitialized = "true";
+  root.scrollTop = 0;
 
   const list = root.querySelector(".ec-credit-list");
   if (!list) throw new Error("The End Credits credit list could not initialize.");
 
+  const backgroundImageInput = root.querySelector(".ec-background-image");
+  if (backgroundImageInput) backgroundImageInput.value = config.backgroundImage ?? "";
+  refreshBackgroundPreview(root);
+
   for (const credit of config.credits) list.append(buildCreditRow(credit));
 
-  root.querySelector(".ec-add-credit")?.addEventListener("click", () => {
-    list.append(buildCreditRow({ id: randomId("credit"), eyebrow: "", main: "New Credit", detail: "" }));
+  const addCredit = (credit = { id: randomId("credit"), eyebrow: "", main: "New Credit", detail: "" }) => {
+    list.append(buildCreditRow(credit));
     refreshTimingSummary(root);
-    list.lastElementChild?.querySelector('[data-field="main"]')?.focus();
+    const row = list.lastElementChild;
+    row?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+    row?.querySelector('[data-field="main"]')?.focus();
+  };
+
+  const addPlayer = () => addCredit({
+    id: randomId("player"),
+    eyebrow: "PLAYER",
+    main: "Character Name",
+    detail: "Played by Player Name"
+  });
+
+  root.querySelector(".ec-add-credit")?.addEventListener("click", () => addCredit());
+  root.querySelector(".ec-add-credit-bottom")?.addEventListener("click", () => addCredit());
+  root.querySelector(".ec-add-player")?.addEventListener("click", addPlayer);
+  root.querySelector(".ec-add-player-bottom")?.addEventListener("click", addPlayer);
+
+  root.querySelector(".ec-browse-background")?.addEventListener("click", () => openBackgroundImagePicker(root));
+  root.querySelector(".ec-clear-background")?.addEventListener("click", () => {
+    if (backgroundImageInput) backgroundImageInput.value = "";
+    refreshBackgroundPreview(root);
+  });
+  backgroundImageInput?.addEventListener("input", () => refreshBackgroundPreview(root));
+
+  const opacityInput = root.querySelector(".ec-background-opacity");
+  opacityInput?.addEventListener("input", () => {
+    const label = root.querySelector(".ec-background-opacity-value");
+    if (label) label.textContent = `${Math.round(Number(opacityInput.value) || 0)}%`;
+    refreshBackgroundPreview(root);
   });
 
   root.querySelector(".ec-preview-button")?.addEventListener("click", () => {
@@ -364,6 +447,49 @@ function initializeManagerDialog(dialog, config) {
   list.addEventListener("input", () => refreshTimingSummary(root));
 
   refreshTimingSummary(root);
+  requestAnimationFrame(() => { root.scrollTop = 0; });
+}
+
+function refreshBackgroundPreview(root) {
+  if (!root) return;
+  const preview = root.querySelector(".ec-background-preview");
+  const input = root.querySelector(".ec-background-image");
+  const opacityInput = root.querySelector(".ec-background-opacity");
+  if (!preview || !input) return;
+
+  const path = String(input.value ?? "").trim();
+  const opacity = clamp((Number(opacityInput?.value) || 0) / 100, 0, 1);
+  preview.style.setProperty("--ec-preview-opacity", String(opacity));
+  preview.style.setProperty("--ec-preview-image", path ? `url(${JSON.stringify(path)})` : "none");
+  preview.classList.toggle("is-empty", !path);
+}
+
+function openBackgroundImagePicker(root) {
+  const input = root?.querySelector?.(".ec-background-image");
+  if (!input) return;
+
+  const FilePicker = globalThis.foundry?.applications?.apps?.FilePicker ?? globalThis.FilePicker;
+  if (!FilePicker) {
+    ui.notifications?.error("Foundry's File Picker is unavailable.");
+    return;
+  }
+
+  try {
+    const picker = new FilePicker({
+      type: "image",
+      current: String(input.value ?? ""),
+      field: input,
+      callback: path => {
+        input.value = path ?? "";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        refreshBackgroundPreview(root);
+      }
+    });
+    const rendered = picker.render({ force: true });
+    if (rendered?.catch) rendered.catch(error => reportManagerError(error));
+  } catch (error) {
+    reportManagerError(error);
+  }
 }
 
 function buildCreditRow(credit) {
@@ -435,6 +561,8 @@ function collectManagerConfig(root) {
   return normalizeConfig({
     durationSeconds: Number(root.querySelector(".ec-duration")?.value),
     backgroundColor: root.querySelector(".ec-background")?.value,
+    backgroundImage: root.querySelector(".ec-background-image")?.value ?? "",
+    backgroundOpacity: clamp((Number(root.querySelector(".ec-background-opacity")?.value) || 0) / 100, 0, 1),
     textColor: root.querySelector(".ec-text-color")?.value,
     accentColor: root.querySelector(".ec-accent-color")?.value,
     fontScale: Number(root.querySelector(".ec-font-scale")?.value),
@@ -530,6 +658,14 @@ function playCredits(rawConfig, startTime, playbackId, { preview = false } = {})
   overlay.style.setProperty("--ec-text", config.textColor);
   overlay.style.setProperty("--ec-accent", config.accentColor);
   overlay.style.setProperty("--ec-scale", String(config.fontScale));
+
+  if (config.backgroundImage) {
+    const backgroundImage = document.createElement("div");
+    backgroundImage.className = "ec-background-image-layer";
+    backgroundImage.style.backgroundImage = `url(${JSON.stringify(config.backgroundImage)})`;
+    backgroundImage.style.opacity = String(config.backgroundOpacity);
+    overlay.append(backgroundImage);
+  }
 
   const stage = document.createElement("div");
   stage.className = "ec-stage";
